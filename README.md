@@ -1,24 +1,76 @@
-# DigiPay wallet API
+# DigiPay · Wallet API
 
-JavaScript, Express and Mongoose. Use Node 24 LTS or newer and a MongoDB replica set (Atlas works). Account creation and wallet operations use multi-document transactions.
+The Express API behind DigiPay’s personal wallets, agent counters, and admin dashboard. MongoDB transactions keep balance updates and their transaction records together.
 
-1. Copy `.env.example` to `.env`. Set a strong random `JWT_SECRET`, the database URI in `MONGODB_URI` (include `/digipay_wallet` before the query string), and browser origins.
-2. Run `npm ci` and `npm run dev`. The API listens on port 5000 by default.
-3. For Google sign-in, use a **Web application** OAuth client. Set `GOOGLE_CLIENT_ID` to the same public ID as the frontend and authorize the exact frontend origin in Google Cloud (locally `http://localhost:3000`). Restart the server. No Google client secret is used.
-4. Set `IMGBB_API_KEY` for profile photos. Set `PUBLIC_APP_URL` to your frontend origin. Configure SMTP credentials for email verification codes and single-use password reset links, or set `RESEND_API_KEY` and a verified `MAIL_FROM` sender. Keep credentials server-side.
-5. Run `npm test`. For the database integration suite, also set `WALLET_TEST_MONGO_URI` to a disposable replica-set URI. Tests use a fresh, isolated database.
+**[Frontend repository](https://github.com/rudraprotapchakraborty/digital-wallet-system-frontend) · [Open the wallet demo](https://digital-wallet-system-frontend-topaz.vercel.app/login) · [Hosted API status](https://digital-wallet-system-backend-nine.vercel.app/)**
 
-Enter name, email, phone number and password on the registration form. POST those fields to `/auth/register/start`, then submit the returned request ID and emailed six-digit code to `/auth/register`. The account and wallet are created together after verification. Sign in using an email address or phone number and password. Google accounts choose a wallet phone number on first use. Agents need approval. Email changes require the current password and a code sent to the new email address, and disconnect Google sign-in once confirmed.
+## How money moves
 
-All paths below are relative to `/api`. Protected requests use a Bearer token.
+| Operation | Who initiates it | Balance movement |
+| --- | --- | --- |
+| Send money | Personal wallet owner | Sender → receiver, identified by wallet phone number |
+| Cash-in | Approved agent | Agent wallet → customer wallet |
+| Cash-out | Personal wallet owner | Customer wallet → approved agent wallet |
+| Add or withdraw | Personal wallet owner | Simulated funds enter or leave the wallet |
 
-- Auth: POST `/auth/register/start`, `/auth/register`, `/auth/login`, `/auth/google`, `/auth/forgot-password`, `/auth/reset-password`.
-- Account: GET, PATCH or DELETE `/auth/me`; POST or DELETE `/auth/me/avatar`; POST `/auth/me/password`; POST and PUT `/auth/me/email`. Closing a wallet requires its current balance and typed account identifier. Transaction records are retained.
-- Wallet: GET `/wallet/me`, `/wallet/transactions`; POST `/wallet/add`, `/wallet/withdraw`, `/wallet/send`. Sending requires `receiverPhone` and `amount`.
-- Agent: POST `/agent/cash-in` and `/agent/cash-out` with `phone` and `amount`; GET `/agent/commission`.
-- Admin: GET `/admin/users`, `/admin/wallets`, `/admin/transactions`; PATCH `/admin/wallets/block/:id`, `/admin/wallets/unblock/:id`, `/admin/agents/approve/:id`, `/admin/agents/suspend/:id`.
-- Support: POST `/support` saves a contact request to the `supportmessages` collection.
+Administrators review activity, manage wallet access, and approve agents. Only personal and agent accounts hold balances. Money writes accept an optional `Idempotency-Key` header. When retrying a request after a timeout, reuse the original key and payload.
 
-Money writes accept an optional `Idempotency-Key` header. Reuse the same key and payload when retrying a request whose outcome is unknown. The wallet is a simulation, with self-funded deposits and agent-recorded cash operations.
+## Run locally
 
-Run `node scripts/seed-demo.js` against the configured digipay_wallet database to create the sample dataset once. Three featured logins appear on the login page. The complete generated credentials are stored in ignored `demo-logins.local.json`. Demo admins and money operations are scoped to the sample data.
+Use **Node.js 24 or newer** and a **MongoDB replica set** such as Atlas. From the repository root, create a `.env` file with the settings below, then start the server.
+
+```dotenv
+MONGODB_URI=mongodb://127.0.0.1:27017/digipay_wallet?replicaSet=rs0
+JWT_SECRET=replace-with-a-long-random-secret
+CLIENT_ORIGINS=http://localhost:3000
+PUBLIC_APP_URL=http://localhost:3000
+PORT=5000
+```
+
+The example URI assumes a local replica set named `rs0`. For Atlas, use your cluster URI with `/digipay_wallet` before the query string.
+
+```sh
+npm ci
+npm run dev
+```
+
+Open **[localhost:5000](http://localhost:5000)** for the status response. API routes use the `/api` prefix. Use `npm start` to run the server without file watching.
+
+### Connect account services
+
+| Feature | Server settings |
+| --- | --- |
+| Email verification and password recovery | Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, and `MAIL_FROM`, or use `RESEND_API_KEY` with a verified `MAIL_FROM`. Reset links use `PUBLIC_APP_URL`. |
+| Google sign-in | Set `GOOGLE_CLIENT_ID` to the frontend’s public web client ID. The API verifies the Google credential against this ID. |
+| Profile photos | Set `IMGBB_API_KEY` on the backend for avatar uploads. |
+
+## API guide
+
+Paths below are relative to `/api`. For protected endpoints, send `Authorization: Bearer <token>`.
+
+| Area | Endpoints |
+| --- | --- |
+| Sign-up | `POST /auth/register/start` sends the six-digit email code. Submit the request ID and code to `POST /auth/register` to complete registration. |
+| Sign-in and recovery | `POST /auth/login`, `POST /auth/google`, `POST /auth/forgot-password`, `POST /auth/reset-password` |
+| Profile | `GET/PATCH/DELETE /auth/me`, `POST/DELETE /auth/me/avatar`, `POST /auth/me/password`, `POST/PUT /auth/me/email` |
+| Wallet activity | `GET /wallet/me`, `GET /wallet/transactions`, `POST /wallet/add`, `POST /wallet/withdraw` |
+| Transfers | `POST /wallet/send` takes `receiverPhone` and `amount`. `POST /wallet/cash-out` takes `agentPhone` and `amount`. |
+| Agent counter | `POST /agent/cash-in` takes the customer’s `phone` and `amount`. `GET /agent/commission` returns commission history. |
+| Admin | `GET /admin/users`, `GET /admin/wallets`, `GET /admin/transactions`. Use `PATCH` on `/admin/wallets/block/:id`, `/admin/wallets/unblock/:id`, `/admin/agents/approve/:id`, or `/admin/agents/suspend/:id`. |
+| Demo and support | `GET /auth/demo-accounts`, `GET /wallet/demo-recipients`, `POST /support` |
+
+Email changes require a password and a code sent to the new address. Confirming the change disconnects Google sign-in. Account closure requires balance and account-identifier confirmation and retains transaction records.
+
+## Demo data and tests
+
+To populate the configured `digipay_wallet` database with sample accounts and transactions, run the seed script once.
+
+```sh
+node scripts/seed-demo.js
+```
+
+The login page features one personal, agent, and admin account each. The seed script writes the full credential list to the Git-ignored `demo-logins.local.json` file.
+
+Run `npm test` for the test suite. To include database integration tests, set `WALLET_TEST_MONGO_URI` to a disposable replica-set URI.
+
+**Built with** Node.js · Express · JavaScript · MongoDB · Mongoose

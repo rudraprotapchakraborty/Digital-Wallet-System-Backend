@@ -2,7 +2,6 @@ const Transaction = require('../transaction/transaction.model');
 const { operation } = require('../wallet/wallet.service');
 
 exports.cashIn = operation('cash_in');
-exports.cashOut = operation('cash_out');
 exports.commissionHistory = async (req, res) => {
   const commissions = await Transaction.find({
     $or: [{ from: req.user._id }, { to: req.user._id }], commission: { $gt: 0 },

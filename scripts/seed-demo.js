@@ -92,7 +92,7 @@ async function seed() {
       password: await bcrypt.hash(a.password, 12), isApproved: a.approved, demo: true, featured: a.featured, createdAt, updatedAt: createdAt });
   }
   const wallets = accounts.map((a, i) => ({ _id: id('wallet-' + (i+1)), user: a.id, balance: balances[i] / 100,
-    demo: true, featured: a.featured, isBlocked: a.walletBlocked, createdAt, updatedAt: new Date(now) }));
+    demo: true, featured: a.featured, isBlocked: a.walletBlocked, createdAt, updatedAt: new Date(now) })).filter((_, i) => accounts[i].role !== 'admin');
   await mongoose.connection.transaction(async session => {
     // Insert-only. A collision with an existing identity or ledger entry rolls back the whole seed.
     await User.insertMany(users, { session, ordered: true });
@@ -102,8 +102,8 @@ async function seed() {
   const saved = await Wallet.find({ _id: { $in: wallets.map(w => w._id) }, demo: true }).lean();
   const savedBalances = new Map(saved.map(w => [String(w.user), Math.round(w.balance * 100)]));
   const count = await Transaction.countDocuments({ _id: { $in: transactions.map(t => t._id) }, demo: true });
-  if (count !== transactions.length || accounts.some((a, i) => savedBalances.get(a.id) !== balances[i])) throw new Error('Seed verification failed.');
-  console.log('Verified in digipay_wallet: 32 personal users, 6 agents, 2 admins, 40 wallets and ' + count + ' transactions.');
+  if (count !== transactions.length || accounts.some((a, i) => a.role !== 'admin' && savedBalances.get(a.id) !== balances[i])) throw new Error('Seed verification failed.');
+  console.log('Verified in digipay_wallet: 32 personal users, 6 agents, 2 admins, 38 wallets and ' + count + ' transactions.');
 }
 
 seed().catch(err => { console.error('Seed failed:', err.code || err.name, err.name === 'Error' ? err.message : 'Check the database connection and fixture uniqueness.'); process.exitCode = 1; }).finally(() => mongoose.disconnect());

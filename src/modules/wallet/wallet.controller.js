@@ -9,6 +9,7 @@ exports.getMyWallet = async (req, res) => {
   res.json(wallet);
 };
 exports.addMoney = operation('add_money');
+exports.cashOut = operation('cash_out');
 exports.withdraw = operation('withdraw');
 exports.sendMoney = operation('send_money');
 exports.getMyTransactions = (req, res) => history(req, res);
@@ -16,7 +17,7 @@ exports.getMyTransactions = (req, res) => history(req, res);
 exports.demoRecipients = async (req, res) => {
   if (!req.user.demo) return res.json([]);
   const recipients = await User.aggregate([
-    { $match: { _id: { $ne: req.user._id }, demo: true, role: 'user', isApproved: true, isBlocked: false } },
+    { $match: { _id: { $ne: req.user._id }, demo: true, role: req.query.role === 'agent' ? 'agent' : 'user', isApproved: true, isBlocked: false } },
     { $sort: { phone: 1 } },
     { $lookup: { from: Wallet.collection.name, localField: '_id', foreignField: 'user',
       pipeline: [{ $match: { demo: true, isBlocked: false } }, { $project: { _id: 1 } }], as: 'wallet' } },

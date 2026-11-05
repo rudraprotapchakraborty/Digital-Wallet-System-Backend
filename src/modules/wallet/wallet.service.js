@@ -20,12 +20,12 @@ async function moveFunds(type, member, body, requestId) {
   const actor = member._id;
   const amount = money(body?.amount);
   const needsPhone = ['send_money', 'cash_in', 'cash_out'].includes(type);
-  const phone = needsPhone ? phoneNumber(type === 'send_money' ? body.receiverPhone : body.phone) : undefined;
+  const phone = needsPhone ? phoneNumber(body[{ send_money: 'receiverPhone', cash_out: 'agentPhone', cash_in: 'phone' }[type]]) : undefined;
   if (requestId && !/^[a-zA-Z0-9_-]{8,80}$/.test(requestId)) fail(400, 'Invalid request identifier.');
   const scope = { actor, requestId };
   function replay(tx) {
     if (tx.type !== type || tx.amount !== amount || tx.targetPhone !== phone) fail(409, 'This request identifier was already used.');
-    return { message: 'Transaction completed.', balance: tx.resultBalance };
+    return { message: 'Transaction completed.', reference: tx.id, balance: tx.resultBalance };
   }
 
   try {
@@ -36,24 +36,16 @@ async function moveFunds(type, member, body, requestId) {
       }
       let target;
       if (needsPhone) {
-        target = await User.findOne({ phone, role: 'user', demo: member.demo ? true : { $ne: true } }).session(session);
+        target = await User.findOne({ phone, role: type === 'cash_out' ? 'agent' : 'user', isApproved: true, isBlocked: false, demo: member.demo ? true : { $ne: true } }).session(session);
         if (!target) fail(404, 'Recipient wallet not found.');
         if (target._id.equals(actor)) fail(400, 'Choose another wallet.');
       }
       let from, to, balance;
-      if (type === 'send_money') {
+      if (target) {
         from = actor;
         to = target._id;
         balance = await adjust(actor, -amount, session);
         await adjust(to, amount, session);
-      } else if (type === 'cash_in' || type === 'cash_out') {
-        // Serialize cash operations with agent wallet closure or blocking.
-        const active = await Wallet.updateOne({ user: actor, isBlocked: false }, { $inc: { __v: 1 } }, { session });
-        if (!active.matchedCount) fail(403, 'Your wallet is unavailable.');
-        const deposit = type === 'cash_in';
-        from = deposit ? actor : target._id;
-        to = deposit ? target._id : actor;
-        balance = await adjust(target._id, deposit ? amount : -amount, session);
       } else {
         const deposit = type === 'add_money';
         if (deposit) to = actor;
@@ -61,10 +53,10 @@ async function moveFunds(type, member, body, requestId) {
         balance = await adjust(actor, deposit ? amount : -amount, session);
       }
       const commission = type.startsWith('cash_') ? Math.round(amount) / 100 : 0;
-      await new Transaction({
+      const transaction = await new Transaction({
         type, from, to, amount, commission, actor, demo: Boolean(member.demo), requestId, targetPhone: phone, resultBalance: balance,
       }).save({ session });
-      return { message: 'Transaction completed.', balance };
+      return { message: 'Transaction completed.', reference: transaction.id, balance };
     });
   } catch (err) {
     if (requestId && err.code === 11000) {

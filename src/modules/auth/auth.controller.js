@@ -59,7 +59,7 @@ exports.login = async (req, res) => {
 };
 
 exports.google = async (req, res) => {
-  const { credential, phone } = req.body || {};
+  const { credential, phone, role = "user" } = req.body || {};
   const audience = process.env.GOOGLE_CLIENT_ID;
   if (!audience) fail(503, 'Google sign-in is unavailable. Use email sign-in.');
   if (typeof credential !== 'string' || !credential || credential.length > 8192) fail(400, 'A Google credential is required.');
@@ -74,14 +74,16 @@ exports.google = async (req, res) => {
   const email = emailAddress(payload.email);
   let user = await User.findOne({ googleSub: payload.sub }).select(credentials);
   if (!user) {
+    if (!["user", "agent"].includes(role)) fail(400, "Choose a personal or agent account.");
     if (await User.exists({ email })) fail(409, 'This email already has a wallet. Use its original sign-in method.');
     if (!phone) return res.json({ requiresPhone: true });
     try {
       const avatar = typeof payload.picture === 'string' && /^https:\/\/[\w.-]+\.googleusercontent\.com\//.test(payload.picture) ? payload.picture : undefined;
       user = await mongoose.connection.transaction(session => createAccount({
         name: fullName((payload.name || 'Wallet member').slice(0, 100)), email, avatar,
-        phone: phoneNumber(phone), googleSub: payload.sub, role: 'user',
+        phone: phoneNumber(phone), googleSub: payload.sub, role, isApproved: role === 'user',
       }, session));
+      if (!user.isApproved) return res.status(201).json({ pendingApproval: true });
     } catch (err) {
       if (err.code !== 11000) throw err;
       user = await User.findOne({ googleSub: payload.sub }).select(credentials);

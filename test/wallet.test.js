@@ -81,11 +81,20 @@ test('wallet and identity integration', { skip: !process.env.WALLET_TEST_MONGO_U
     const options = { body: { credential: 'invalid' } };
     t.mock.method(OAuth2Client.prototype, 'verifyIdToken', async ({ idToken, audience }) => {
       assert.equal(audience, 'wallet-test-client');
+      if (idToken === 'agent-google') return { getPayload: () => ({ sub: 'agent-google', email: 'google-agent@example.test', email_verified: true }) };
       if (idToken !== 'test-token') throw new Error('Invalid signature');
       return { getPayload: () => ({ sub: 'google-id', email: 'google@example.test', email_verified: true, name: 'Google member' }) };
     });
     assert.equal((await request('/auth/google', options)).status, 401);
-    const body = { credential: 'test-token', role: 'admin' };
+    assert.equal((await request('/auth/google', { body: { credential: 'test-token', role: 'admin' } })).status, 400);
+    const agentSignup = { credential: 'agent-google', role: 'agent', phone: '01700000005' };
+    const pending = await request('/auth/google', { body: agentSignup });
+    assert.equal(pending.pendingApproval, true);
+    assert.equal(pending.token, undefined);
+    assert.equal((await request('/auth/google', { body: { credential: 'agent-google' } })).status, 403);
+    await User.updateOne({ googleSub: 'agent-google' }, { isApproved: true });
+    assert.equal((await request('/auth/google', { body: { credential: 'agent-google' } })).role, 'agent');
+    const body = { credential: 'test-token' };
     assert.equal((await request('/auth/google', { body })).requiresPhone, true);
     assert.equal((await request('/auth/google', { body: { ...body, phone: first.phone } })).status, 409);
     const signed = await request('/auth/google', { body: { ...body, phone: '01700000003' } });
@@ -113,10 +122,24 @@ test('wallet and identity integration', { skip: !process.env.WALLET_TEST_MONGO_U
     assert.equal((await request('/auth/login', { body })).status, 403);
     await User.updateOne({ phone: body.phone }, { isApproved: true });
     const agent = await request('/auth/login', { body });
-    const cash = { token: agent.token, body: { phone: first.phone, amount: '10.00' } };
-    assert.equal((await request('/agent/cash-in', cash)).status, 200);
+    const opening = (await wallet(user.id)).balance;
+    const cash = { key: 'agent-cash-in-test', token: agent.token, body: { phone: first.phone, amount: '10.00' } };
+    assert.equal((await request('/agent/cash-in', cash)).balance, 40);
+    assert.equal((await request('/agent/cash-in', cash)).balance, 40);
+    const tooMuch = { ...cash, key: 'unfunded-cash-in', body: { phone: first.phone, amount: 41 } };
+    assert.equal((await request('/agent/cash-in', tooMuch)).status, 400);
+    assert.equal((await wallet(agent.user.id)).balance, 40);
+    assert.equal((await wallet(user.id)).balance, Math.round((opening + 10) * 100) / 100);
     assert.equal((await request('/agent/commission', { token: agent.token })).total, 0.1);
+    assert.equal((await request('/agent/cash-out', cash)).status, 403);
+    const payout = { token, body: { agentPhone: body.phone, amount: 5 }, key: 'cash-out-test' };
+    const before = (await wallet(user.id)).balance;
+    assert.equal((await request('/wallet/cash-out', payout)).status, 200);
+    assert.equal((await request('/wallet/cash-out', payout)).status, 200);
+    assert.equal((await wallet(user.id)).balance, Math.round((before - 5) * 100) / 100);
+    assert.equal((await wallet(agent.user.id)).balance, 45);
     await User.updateOne({ phone: body.phone }, { isApproved: false });
+    assert.equal((await request('/wallet/cash-out', { ...payout, key: 'suspended-test' })).status, 404);
     assert.equal((await request('/agent/cash-out', cash)).status, 403);
   });
   await t.test('email and phone login, password changes, avatar and wallet closure', async t => {
