@@ -1,16 +1,13 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
+const User = require('../modules/user/user.model');
+const Wallet = require('../modules/wallet/wallet.model');
+const Transaction = require('../modules/transaction/transaction.model');
+const { Challenge } = require('../modules/auth/email-verification');
+const { Reset } = require('../modules/auth/password-reset');
 
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    console.log("MongoDB connected");
-  } catch (error) {
-    console.error(error.message);
-    process.exit(1);
-  }
+module.exports = async function connectDB() {
+  const uri = process.env.MONGODB_URI || process.env.MONGO_URI;
+  if (!uri || !process.env.JWT_SECRET) throw new Error('Set MONGODB_URI and JWT_SECRET before starting the API.');
+  await mongoose.connect(uri, { serverSelectionTimeoutMS: 10000 });
+  await Promise.all([Challenge.init(), Reset.init(), User.init(), Wallet.init(), Transaction.init()]);
 };
-
-module.exports = connectDB;

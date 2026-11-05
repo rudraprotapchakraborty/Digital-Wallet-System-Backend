@@ -6,6 +6,7 @@ const role = require('../../middlewares/roleMiddleware');
 
 // Get my wallet
 router.get('/me', auth, controller.getMyWallet);
+router.get('/demo-recipients', auth, role('user'), controller.demoRecipients);
 
 // Add money (user)
 router.post('/add', auth, role('user'), controller.addMoney);

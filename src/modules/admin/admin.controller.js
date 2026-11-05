@@ -1,59 +1,40 @@
 const User = require('../user/user.model');
 const Wallet = require('../wallet/wallet.model');
-const Transaction = require('../transaction/transaction.model');
+const history = require('../transaction/history');
+const { fail } = require('../../utils/validation');
 
-// View all users/agents
 exports.listUsers = async (req, res) => {
-  const { role } = req.query;
-  const filter = role ? { role } : {};
-  const users = await User.find(filter).select('-password');
-  res.json(users);
+  const { role, page, search } = req.query;
+  const filter = req.user.demo ? { demo: true } : {};
+  if (role) filter.role = String(role);
+  if (search) {
+    const pattern = new RegExp(RegExp.escape(String(search).slice(0, 100)), 'i');
+    filter.$or = [{ name: pattern }, { phone: pattern }];
+  }
+  const query = User.find(filter).sort({ createdAt: -1, _id: -1 }).lean();
+  if (page === undefined) return res.json(await query);
+  const number = Number(page);
+  if (!Number.isSafeInteger(number) || number < 1 || number > 1000000) fail(400, 'Invalid page.');
+  const [users, count] = await Promise.all([query.skip((number - 1) * 15).limit(15), User.countDocuments(filter)]);
+  const wallets = await Wallet.find({ user: { $in: users.map(u => u._id) } }).select('user isBlocked').lean();
+  const byOwner = new Map(wallets.map(w => [String(w.user), w]));
+  res.json({
+    users: users.map(user => { const wallet = byOwner.get(String(user._id)); return { ...user, walletId: wallet?._id, isBlocked: wallet?.isBlocked ?? user.isBlocked }; }),
+    totalPages: Math.max(1, Math.ceil(count / 15)), total: count,
+  });
 };
+exports.listWallets = async (req, res) => res.json(await Wallet.find(req.user.demo ? { demo: true } : {}).populate('user', 'name phone role'));
+exports.listTransactions = (req, res) => history(req, res, true);
 
-// View all wallets
-exports.listWallets = async (req, res) => {
-  const wallets = await Wallet.find().populate('user', 'name phone role');
-  res.json(wallets);
-};
-
-// View all transactions
-exports.listTransactions = async (req, res) => {
-  const txns = await Transaction.find().sort({ createdAt: -1 }).populate('from to', 'name phone role');
-  res.json(txns);
-};
-
-// Block/unblock wallet
-exports.blockWallet = async (req, res) => {
-  const { id } = req.params;
-  const wallet = await Wallet.findById(id);
-  if(!wallet) return res.status(404).json({ message: "Wallet not found" });
-  wallet.isBlocked = true;
-  await wallet.save();
-  res.json({ message: "Wallet blocked" });
-};
-exports.unblockWallet = async (req, res) => {
-  const { id } = req.params;
-  const wallet = await Wallet.findById(id);
-  if(!wallet) return res.status(404).json({ message: "Wallet not found" });
-  wallet.isBlocked = false;
-  await wallet.save();
-  res.json({ message: "Wallet unblocked" });
-};
-
-// Approve/suspend agents
-exports.approveAgent = async (req, res) => {
-  const { id } = req.params;
-  const agent = await User.findOne({ _id: id, role: 'agent' });
-  if(!agent) return res.status(404).json({ message: 'Agent not found' });
-  agent.isApproved = true;
-  await agent.save();
-  res.json({ message: 'Agent approved' });
-};
-exports.suspendAgent = async (req, res) => {
-  const { id } = req.params;
-  const agent = await User.findOne({ _id: id, role: 'agent' });
-  if(!agent) return res.status(404).json({ message: 'Agent not found' });
-  agent.isApproved = false;
-  await agent.save();
-  res.json({ message: 'Agent suspended' });
-};
+function changeState(Model, filter, update, message) {
+  return async (req, res) => {
+    const scope = req.user.demo ? { demo: true, featured: { $ne: true } } : {};
+    const row = await Model.findOneAndUpdate({ _id: req.params.id, ...filter, ...scope }, update);
+    if (!row) fail(404, 'Account or wallet not found.');
+    res.json({ message });
+  };
+}
+exports.blockWallet = changeState(Wallet, {}, { isBlocked: true }, 'Wallet blocked.');
+exports.unblockWallet = changeState(Wallet, {}, { isBlocked: false }, 'Wallet unblocked.');
+exports.approveAgent = changeState(User, { role: 'agent' }, { isApproved: true }, 'Agent approved.');
+exports.suspendAgent = changeState(User, { role: 'agent' }, { isApproved: false }, 'Agent suspended.');
