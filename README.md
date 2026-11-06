@@ -1,6 +1,6 @@
-# DigiPay · Digital Wallet System — Wallet API
+# Digital Wallet System · Wallet API
 
-The Express API behind DigiPay’s personal wallets, agent counters, and admin dashboard. MongoDB transactions keep balance updates and their transaction records together.
+The Express API behind the digital wallet system’s personal wallets, agent counters, and admin dashboard (branded DigiPay in the web app). MongoDB transactions keep balance updates and their transaction records together.
 
 **[Frontend repository](https://github.com/rudraprotapchakraborty/digital-wallet-system-frontend) · [Open the wallet demo](https://digital-wallet-system-frontend-topaz.vercel.app/login) · [Hosted API status](https://digital-wallet-system-backend-nine.vercel.app/)**
 
