@@ -1,4 +1,4 @@
-# DigiPay · Wallet API
+# DigiPay · Digital Wallet System — Wallet API
 
 The Express API behind DigiPay’s personal wallets, agent counters, and admin dashboard. MongoDB transactions keep balance updates and their transaction records together.
 

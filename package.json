@@ -1,5 +1,5 @@
 {
-  "name": "digital-wallet-api",
+  "name": "digital-wallet-system-backend",
   "version": "1.0.0",
   "description": "A secure, modular, and role-based backend API for a digital wallet system (Bkash/Nagad style) using Express.js and Mongoose.",
   "main": "src/server.js",
