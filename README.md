@@ -1,8 +1,25 @@
-# Digital Wallet System · Wallet API
+<div align="center">
+
+# 💸 Digital Wallet System
+
+**Digital wallet for sending money, deposits, withdrawals and agent cash services.**
+
+[**Live demo**](https://digital-wallet-system-frontend-topaz.vercel.app/) · [Frontend](https://github.com/rudraprotapchakraborty/digital-wallet-system-frontend) · [API status](https://digital-wallet-system-backend-nine.vercel.app/) · [Portfolio](https://rudraprotapchakraborty.com/projects)
+
+![Node.js](https://img.shields.io/badge/Node.js-3c873a?style=for-the-badge&logo=nodedotjs&logoColor=ffffff) ![Express](https://img.shields.io/badge/Express-000000?style=for-the-badge&logo=express&logoColor=ffffff) ![MongoDB](https://img.shields.io/badge/MongoDB-47a248?style=for-the-badge&logo=mongodb&logoColor=ffffff) ![JWT](https://img.shields.io/badge/JWT-000000?style=for-the-badge&logo=jsonwebtokens&logoColor=ffffff) ![Google Sign--In](https://img.shields.io/badge/Google_Sign--In-4285f4?style=for-the-badge&logo=google&logoColor=ffffff)
+
+<a href="https://digital-wallet-system-frontend-topaz.vercel.app/"><img src="https://i.ibb.co/HLx4BZ5g/digipay.webp" alt="Digital Wallet System: home page" width="880"></a>
+
+</div>
+
+> The REST API of **DigiPay**.
+>
+> - Send money by phone number, add and withdraw funds, search transaction history
+> - Agents handle cash-in and cash-out and earn a 1% commission
+> - Admins review activity, manage wallet access and approve agents
+> - MongoDB transactions keep balances and transaction records together
 
 The Express API behind the digital wallet system’s personal wallets, agent counters, and admin dashboard (branded DigiPay in the web app). MongoDB transactions keep balance updates and their transaction records together.
-
-**[Frontend repository](https://github.com/rudraprotapchakraborty/digital-wallet-system-frontend) · [Open the wallet demo](https://digital-wallet-system-frontend-topaz.vercel.app/login) · [Hosted API status](https://digital-wallet-system-backend-nine.vercel.app/)**
 
 ## How money moves
 
@@ -74,3 +91,11 @@ The login page features one personal, agent, and admin account each. The seed sc
 Run `npm test` for the test suite. To include database integration tests, set `WALLET_TEST_MONGO_URI` to a disposable replica-set URI.
 
 **Built with** Node.js · Express · JavaScript · MongoDB · Mongoose
+
+---
+
+<div align="center">
+
+Made by **[Rudra Protap Chakraborty](https://rudraprotapchakraborty.com)** · [Portfolio](https://rudraprotapchakraborty.com) · [GitHub](https://github.com/rudraprotapchakraborty)
+
+</div>
